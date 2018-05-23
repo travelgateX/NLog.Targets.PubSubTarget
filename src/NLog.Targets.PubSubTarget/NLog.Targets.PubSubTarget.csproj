@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net462</TargetFrameworks>
+    <Description>An NLog target that send logs by pubsub.</Description>
+    <PackageLicenseUrl>https://github.com/XML-Travelgate/NLog.Targets.PubSubTarget/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/XML-Travelgate/NLog.Targets.PubSubTarget.git</PackageProjectUrl>
+    <PackageTags>NLog logging target to send logs with pubsub </PackageTags>
+    <Authors>XMLTravelgate</Authors>
+    <Company>XMLTravelgate</Company>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <AssemblyName>NLog.Targets.PubSubTarget</AssemblyName>
+    <RootNamespace>NLog.Targets.PubSubTarget</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="ExpandoObjectExtensions.cs" />
+    <Compile Remove="Field.cs" />
+    <Compile Remove="IPostTarget.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Apis" Version="1.20.0" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.20.0" />
+    <PackageReference Include="Google.Apis.Pubsub.v1" Version="1.12.0.441" />
+    <PackageReference Include="NLog" Version="4.5.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net462' ">
+    <PackageReference Include="Newtonsoft.Json" Version="9.0.1" />
+    <PackageReference Include="System.Net.Http" Version="4.0.0" />
+  </ItemGroup>
+
+</Project>
