@@ -109,7 +109,7 @@ namespace NLog.Targets.PubSubTarget
             }
             catch (Exception ex)
             {
-                InternalLogger.Error($"Error while sending log messages to PubSub: message=\"{ex.Message}\"");
+                InternalLogger.Error($"Error while sending log messages to PubSub: message=\"{ex.ToString()}\"");
 
                 foreach (var ev in logEvents)
                 {
