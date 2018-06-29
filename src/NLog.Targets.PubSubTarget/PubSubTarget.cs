@@ -95,7 +95,11 @@ namespace NLog.Targets.PubSubTarget
                 int count = 0;
                 foreach(var task in tasks)
                 {
-                    if (task.Result.MessageIds.Count != pubSubRequests[count].Messages.Count)
+                    if (task.Exception != null)
+                    {
+                        InternalLogger.Trace($"Failed to send message to PubSub: exception={task.Exception.ToString()}");
+                    }
+                    else if (task.Result.MessageIds.Count != pubSubRequests[count].Messages.Count)
                     {
                         InternalLogger.Trace($"Failed to send all messages to PubSub: total messages={pubSubRequests[count].Messages.Count}, messages received ={task.Result.MessageIds.Count}");
                     }
