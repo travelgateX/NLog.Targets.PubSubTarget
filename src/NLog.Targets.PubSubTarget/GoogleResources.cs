@@ -14,30 +14,37 @@ namespace Nlog.Targets.PubSub
         private static readonly object SyncLock_LOCK = new object();
         private static GoogleResources _mInstance;
 
-
-        public static string ServiceAccountEmail;
-        public static string ApplicationName;
-        public static string FileNameCertificateP12;
-        public static string PasswordCertificateP12;
-
-        public static GoogleResources Instance
+        public static GoogleResources Instance(string ServiceAccountEmail, string ApplicationName, string FileNameCertificateP12, string PasswordCertificateP12, string Directory)
         {
-            get
-            {
                 if ((_mInstance == null))
                     lock (SyncLock_LOCK)
                         if ((_mInstance == null))
-                            _mInstance = loadResources();
+                            _mInstance = loadResources(ServiceAccountEmail, ApplicationName, FileNameCertificateP12, PasswordCertificateP12, Directory);
                 return _mInstance;
-            }
         }
 
-        private static GoogleResources loadResources()
+        private static GoogleResources loadResources(string ServiceAccountEmail, string ApplicationName, string FileNameCertificateP12, string PasswordCertificateP12, string Directory)
         {
             GoogleResources bqResources = new GoogleResources();
             try
             {
-                X509Certificate2 certificate = new X509Certificate2(Path.Combine(Environment.CurrentDirectory, FileNameCertificateP12), PasswordCertificateP12, X509KeyStorageFlags.Exportable);
+                X509Certificate2 certificate;
+
+                string dir = string.Empty;
+
+                if (string.IsNullOrEmpty(Directory))
+                {
+                    dir = Path.Combine(Environment.CurrentDirectory, FileNameCertificateP12);
+                }
+                else
+                {
+                    dir = Path.Combine(Directory, FileNameCertificateP12);
+                }
+
+                InternalLogger.Warn($"Get FileP12 from path={dir}");
+
+                certificate = new X509Certificate2(dir, PasswordCertificateP12, X509KeyStorageFlags.Exportable);
+
                 var inicializer = new ServiceAccountCredential.Initializer(ServiceAccountEmail).FromCertificate(certificate);
                 inicializer.Scopes = new List<string>(new string[] { Google.Apis.Pubsub.v1.PubsubService.Scope.Pubsub });
                 ServiceAccountCredential credential = new ServiceAccountCredential(inicializer);
@@ -49,7 +56,7 @@ namespace Nlog.Targets.PubSub
             }
             catch (Exception ex)
             {
-                InternalLogger.Error($"Failed to send message to PubSub ex={ex.Message}");
+                InternalLogger.Error($"Failed to initialize GoogleResources to PubSub ex={ex.ToString()}");
             }
 
             return bqResources;

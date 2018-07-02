@@ -19,6 +19,8 @@ namespace NLog.Targets.PubSubTarget
 
         public string FileNameCertificateP12 { get; set; }
 
+        public string DirectoryCertificateP12 { get; set; } 
+
         public string PasswordCertificateP12 { get; set; }
 
         public string Topic { get; set; }
@@ -46,11 +48,6 @@ namespace NLog.Targets.PubSubTarget
         protected override void InitializeTarget()
         {
             base.InitializeTarget();
-            GoogleResources.ServiceAccountEmail = ServiceAccountEmail;
-            GoogleResources.ApplicationName = ApplicationName;
-            GoogleResources.FileNameCertificateP12 = FileNameCertificateP12;
-            GoogleResources.PasswordCertificateP12 = PasswordCertificateP12;
-
         }
 
         protected override void Write(AsyncLogEventInfo logEvent)
@@ -86,7 +83,7 @@ namespace NLog.Targets.PubSubTarget
 
                 foreach(var pubSubRequest in pubSubRequests)
                 {
-                    var pubSubResponse = GoogleResources.Instance.pubsubService.Projects.Topics.Publish(pubSubRequest,this.Topic).ExecuteAsync();
+                    var pubSubResponse = GoogleResources.Instance(ServiceAccountEmail, ApplicationName, FileNameCertificateP12, PasswordCertificateP12, DirectoryCertificateP12).pubsubService.Projects.Topics.Publish(pubSubRequest,this.Topic).ExecuteAsync();
                     tasks.Add(pubSubResponse);
                 }
 
