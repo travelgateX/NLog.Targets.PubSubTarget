@@ -43,7 +43,7 @@ namespace Nlog.Targets.PubSub
 
                 InternalLogger.Warn($"Get FileP12 from path={dir}");
 
-                certificate = new X509Certificate2(dir, PasswordCertificateP12, X509KeyStorageFlags.Exportable);
+                certificate = new X509Certificate2(dir, PasswordCertificateP12, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet);
 
                 var inicializer = new ServiceAccountCredential.Initializer(ServiceAccountEmail).FromCertificate(certificate);
                 inicializer.Scopes = new List<string>(new string[] { Google.Apis.Pubsub.v1.PubsubService.Scope.Pubsub });
