@@ -28,6 +28,8 @@ namespace NLog.Targets.PubSubTarget
 
         public bool? ConcatMessages { get; set; }
 
+        public int? Retry { get; set; } = 1;
+
         public string Atributes { get; set; }
 
         private Dictionary<string, string> _atributesD = null;
@@ -91,28 +93,47 @@ namespace NLog.Targets.PubSubTarget
                     pubSubRequests = FormPayload(logEvents);
                 }
 
-                List<Task<PublishResponse>> tasks = new List<Task<PublishResponse>>();
+                int retryCount = 0;
 
-                foreach(var pubSubRequest in pubSubRequests)
+                List<Task<PublishResponse>> tasks = null;
+
+                while (pubSubRequests.Count != 0 && retryCount < Retry)
                 {
-                    var pubSubResponse = GoogleResources.Instance(ServiceAccountEmail, ApplicationName, FileNameCertificateP12, PasswordCertificateP12, DirectoryCertificateP12).pubsubService.Projects.Topics.Publish(pubSubRequest,this.Topic).ExecuteAsync();
-                    tasks.Add(pubSubResponse);
+                    tasks = new List<Task<PublishResponse>>();
+
+                    foreach (var pubSubRequest in pubSubRequests)
+                    {
+                        var pubSubResponse = GoogleResources.Instance(ServiceAccountEmail, ApplicationName, FileNameCertificateP12, PasswordCertificateP12, DirectoryCertificateP12).pubsubService.Projects.Topics.Publish(pubSubRequest, this.Topic).ExecuteAsync();
+                        tasks.Add(pubSubResponse);
+                    }
+
+                    await Task.WhenAll(tasks);
+
+                    List<PublishRequest> pubSubRequestsRetry = new List<PublishRequest>();
+
+                    int count = 0;
+                    foreach (var task in tasks)
+                    {
+                        if (task.Exception != null)
+                        {
+                            pubSubRequestsRetry.Add(pubSubRequests[count]);
+                        }
+                        else if (task.Result.MessageIds.Count != pubSubRequests[count].Messages.Count)
+                        {
+                            InternalLogger.Trace($"Failed to send all messages to PubSub: total messages={pubSubRequests[count].Messages.Count}, messages received ={task.Result.MessageIds.Count}");
+                        }
+                        count += 1;
+                    }
+                    retryCount += 1;
+                    pubSubRequests = pubSubRequestsRetry;
                 }
 
-                await Task.WhenAll(tasks);
-
-                int count = 0;
-                foreach(var task in tasks)
+                foreach (var task in tasks)
                 {
                     if (task.Exception != null)
                     {
                         InternalLogger.Trace($"Failed to send message to PubSub: exception={task.Exception.ToString()}");
                     }
-                    else if (task.Result.MessageIds.Count != pubSubRequests[count].Messages.Count)
-                    {
-                        InternalLogger.Trace($"Failed to send all messages to PubSub: total messages={pubSubRequests[count].Messages.Count}, messages received ={task.Result.MessageIds.Count}");
-                    }
-                    count += 1;
                 }
 
                 foreach (var ev in logEvents)
@@ -158,7 +179,7 @@ namespace NLog.Targets.PubSubTarget
                     totalBytes = 0;
                 }
 
-                pRequest.Messages.Add(new PubsubMessage() { Attributes = _atributesD, Data = Convert.ToBase64String(bytes) });
+                pRequest.Messages.Add(new PubsubMessage() {Attributes = _atributesD, Data = Convert.ToBase64String(bytes) });
                 totalBytes += bytes.Length;
 
             }
