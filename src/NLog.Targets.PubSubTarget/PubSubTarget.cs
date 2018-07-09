@@ -4,6 +4,7 @@ using NLog.Common;
 using Google.Apis.Pubsub.v1.Data;
 using Nlog.Targets.PubSub;
 using System.Threading.Tasks;
+using System.Text;
 
 namespace NLog.Targets.PubSubTarget
 {
@@ -24,6 +25,8 @@ namespace NLog.Targets.PubSubTarget
         public string PasswordCertificateP12 { get; set; }
 
         public string Topic { get; set; }
+
+        public bool? ConcatMessages { get; set; }
 
         public string Atributes { get; set; }
 
@@ -77,7 +80,16 @@ namespace NLog.Targets.PubSubTarget
                     }
                 }
 
-                var pubSubRequests = FormPayload(logEvents);
+                List<PublishRequest> pubSubRequests;
+
+                if (ConcatMessages == true )
+                {
+                    pubSubRequests = FormPayloadConcat(logEvents);
+                }
+                else
+                {
+                    pubSubRequests = FormPayload(logEvents);
+                }
 
                 List<Task<PublishResponse>> tasks = new List<Task<PublishResponse>>();
 
@@ -155,6 +167,55 @@ namespace NLog.Targets.PubSubTarget
             {
                 pRequestList.Add(pRequest);
             }
+            return pRequestList;
+        }
+
+        private List<PublishRequest> FormPayloadConcat(ICollection<AsyncLogEventInfo> logEvents)
+        {
+
+            List<PublishRequest> pRequestList = new List<PublishRequest>();
+
+            PublishRequest pRequest = new PublishRequest()
+            {
+                Messages = new List<PubsubMessage>()
+            };
+
+            int totalBytes = 0;
+
+           
+            StringBuilder sb = new StringBuilder();
+            
+            foreach (var ev in logEvents)
+            {
+                var bytes = System.Text.Encoding.UTF8.GetBytes(Layout.Render(ev.LogEvent));
+
+                if (bytes.Length + totalBytes > MaxBytesPerRequest)
+                {
+                    pRequest.Messages.Add(new PubsubMessage() { Attributes = _atributesD, Data = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(sb.ToString()))});
+                    pRequestList.Add(pRequest);
+                    pRequest = new PublishRequest()
+                    {
+                        Messages = new List<PubsubMessage>()
+                    };
+
+                    sb = new StringBuilder();
+
+                    totalBytes = 0;
+                }
+
+                sb.AppendLine(Layout.Render(ev.LogEvent));
+
+                totalBytes += bytes.Length;
+
+            }
+
+            //Enviamos los últimos mensajes
+            if (totalBytes > 0)
+            {
+                pRequest.Messages.Add(new PubsubMessage() { Attributes = _atributesD, Data = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(sb.ToString()))});
+                pRequestList.Add(pRequest);
+            }
+
             return pRequestList;
         }
     }
