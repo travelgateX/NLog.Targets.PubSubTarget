@@ -3,9 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using Google.Apis.Auth.OAuth2;
-using Google.Apis.Pubsub.v1;
+//using Google.Apis.Pubsub.v1;
 using Google.Apis.Services;
+using Google.Cloud.PubSub.V1;
 using NLog.Common;
+using Grpc.Auth;
+using Grpc.Core;
+using Google.Api.Gax.Grpc;
+using Google.Api.Gax;
 
 namespace Nlog.Targets.PubSub
 {
@@ -14,22 +19,23 @@ namespace Nlog.Targets.PubSub
         private static readonly object SyncLock_LOCK = new object();
         private static GoogleResources _mInstance;
 
-        public static GoogleResources Instance(string ServiceAccountEmail, string ApplicationName, string FileNameCertificateP12, string PasswordCertificateP12, string Directory)
+        public static GoogleResources Instance(string FileNameCertificateP12, string Directory, string project, string topic)
         {
                 if ((_mInstance == null))
                     lock (SyncLock_LOCK)
                         if ((_mInstance == null))
-                            _mInstance = loadResources(ServiceAccountEmail, ApplicationName, FileNameCertificateP12, PasswordCertificateP12, Directory);
-                return _mInstance;
+                             _mInstance = loadResources(FileNameCertificateP12, Directory, project, topic);
+            return _mInstance;
         }
 
-        private static GoogleResources loadResources(string ServiceAccountEmail, string ApplicationName, string FileNameCertificateP12, string PasswordCertificateP12, string Directory)
+        private static GoogleResources loadResources(string FileNameCertificateP12, string Directory, string project, string topic)
         {
+
+
+
             GoogleResources bqResources = new GoogleResources();
             try
             {
-                X509Certificate2 certificate;
-
                 string dir = string.Empty;
 
                 if (string.IsNullOrEmpty(Directory))
@@ -41,18 +47,30 @@ namespace Nlog.Targets.PubSub
                     dir = Path.Combine(Directory, FileNameCertificateP12);
                 }
 
-                InternalLogger.Warn($"Get FileP12 from path={dir}");
+                GoogleCredential cred = GoogleCredential.FromFile(FileNameCertificateP12);
 
-                certificate = new X509Certificate2(dir, PasswordCertificateP12, X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet);
 
-                var inicializer = new ServiceAccountCredential.Initializer(ServiceAccountEmail).FromCertificate(certificate);
-                inicializer.Scopes = new List<string>(new string[] { Google.Apis.Pubsub.v1.PubsubService.Scope.Pubsub });
-                ServiceAccountCredential credential = new ServiceAccountCredential(inicializer);
-                var baseInicializer = new BaseClientService.Initializer();
-                baseInicializer.HttpClientInitializer = credential;
-                baseInicializer.ApplicationName = ApplicationName;
-                PubsubService psService = new PubsubService(baseInicializer);
-                bqResources.pubsubService = psService;
+                Channel channel = new Channel(
+                    PublisherServiceApiClient.DefaultEndpoint.Host, PublisherServiceApiClient.DefaultEndpoint.Port, cred.ToChannelCredentials());
+
+
+                BackoffSettings bofretries = new BackoffSettings(TimeSpan.FromMilliseconds(900), TimeSpan.FromMilliseconds(3000), 2);
+
+                BackoffSettings boftimeouts = new BackoffSettings(TimeSpan.FromMilliseconds(2000), TimeSpan.FromMilliseconds(2000), 1);
+
+                RetrySettings settings = new RetrySettings(bofretries, boftimeouts, Expiration.FromTimeout(TimeSpan.FromSeconds(3)));
+
+                CallTiming ct = CallTiming.FromRetry(settings);
+
+                PublisherServiceApiSettings pas = PublisherServiceApiSettings.GetDefault();
+                pas.PublishSettings = CallSettings.FromCallTiming(ct);
+
+                PublisherServiceApiClient client = PublisherServiceApiClient.Create(channel, pas);
+
+                bqResources.topic = new TopicName(project, topic);
+
+                bqResources.publisherServiceApiClient = client;
+
             }
             catch (Exception ex)
             {
@@ -62,6 +80,10 @@ namespace Nlog.Targets.PubSub
             return bqResources;
         }
 
-        public PubsubService pubsubService { get; private set; }
+        //public PubsubService pubsubService { get; private set; }
+
+        public PublisherServiceApiClient publisherServiceApiClient { get; private set; }
+
+        public TopicName topic { get; private set; }
     }
 }

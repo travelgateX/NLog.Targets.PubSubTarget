@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using NLog.Common;
-using Google.Apis.Pubsub.v1.Data;
+//using Google.Apis.Pubsub.v1.Data;
+using Google.Cloud.PubSub.V1;
 using Nlog.Targets.PubSub;
 using System.Threading.Tasks;
 using System.Text;
@@ -14,21 +15,17 @@ namespace NLog.Targets.PubSubTarget
 
         public int MaxBytesPerRequest { get; set; } = 1048576;
 
-        public string ServiceAccountEmail { get; set; }
+        public int MaxMessagesPerRequest { get; set; } = 1000;
 
-        public string ApplicationName { get; set; }
+        public string FileName { get; set; }
 
-        public string FileNameCertificateP12 { get; set; }
-
-        public string DirectoryCertificateP12 { get; set; } 
-
-        public string PasswordCertificateP12 { get; set; }
+        public string Directory { get; set; } 
 
         public string Topic { get; set; }
 
-        public bool? ConcatMessages { get; set; }
+        public string Project { get; set; }
 
-        public int? Retry { get; set; } = 1;
+        public bool? ConcatMessages { get; set; }
 
         public string Atributes { get; set; }
 
@@ -82,7 +79,7 @@ namespace NLog.Targets.PubSubTarget
                     }
                 }
 
-                List<PublishRequest> pubSubRequests;
+                List<List<PubsubMessage>> pubSubRequests = null;
 
                 if (ConcatMessages == true )
                 {
@@ -93,48 +90,32 @@ namespace NLog.Targets.PubSubTarget
                     pubSubRequests = FormPayload(logEvents);
                 }
 
-                int retryCount = 0;
+                List<Task<PublishResponse>> tasks = new List<Task<PublishResponse>>();
 
-                List<Task<PublishResponse>> tasks = null;
+                GoogleResources gr = GoogleResources.Instance(FileName, Directory, Project, Topic);
 
-                while (pubSubRequests.Count != 0 && retryCount < Retry)
+                foreach (var pubSubRequest in pubSubRequests)
                 {
-                    tasks = new List<Task<PublishResponse>>();
-
-                    foreach (var pubSubRequest in pubSubRequests)
-                    {
-                        var pubSubResponse = GoogleResources.Instance(ServiceAccountEmail, ApplicationName, FileNameCertificateP12, PasswordCertificateP12, DirectoryCertificateP12).pubsubService.Projects.Topics.Publish(pubSubRequest, this.Topic).ExecuteAsync();
-                        tasks.Add(pubSubResponse);
-                    }
-
-                    await Task.WhenAll(tasks);
-
-                    List<PublishRequest> pubSubRequestsRetry = new List<PublishRequest>();
-
-                    int count = 0;
-                    foreach (var task in tasks)
-                    {
-                        if (task.Exception != null)
-                        {
-                            pubSubRequestsRetry.Add(pubSubRequests[count]);
-                        }
-                        else if (task.Result.MessageIds.Count != pubSubRequests[count].Messages.Count)
-                        {
-                            InternalLogger.Trace($"Failed to send all messages to PubSub: total messages={pubSubRequests[count].Messages.Count}, messages received ={task.Result.MessageIds.Count}");
-                        }
-                        count += 1;
-                    }
-                    retryCount += 1;
-                    pubSubRequests = pubSubRequestsRetry;
+                    Task<PublishResponse> pubSubResponse = gr.publisherServiceApiClient.PublishAsync(gr.topic, pubSubRequest);
+                    tasks.Add(pubSubResponse);
                 }
 
+                await Task.WhenAll(tasks);
+
+                int count = 0;
                 foreach (var task in tasks)
                 {
                     if (task.Exception != null)
                     {
                         InternalLogger.Trace($"Failed to send message to PubSub: exception={task.Exception.ToString()}");
                     }
+                    else if (task.Result.MessageIds.Count != pubSubRequests[count].Count)
+                    {
+                        InternalLogger.Trace($"Failed to send all messages to PubSub: total messages={pubSubRequests[count].Count}, messages received ={task.Result.MessageIds.Count}");
+                    }
+                    count += 1;
                 }
+
 
                 foreach (var ev in logEvents)
                 {
@@ -152,92 +133,106 @@ namespace NLog.Targets.PubSubTarget
             }
         }
 
-        private List<PublishRequest> FormPayload(ICollection<AsyncLogEventInfo> logEvents)
+        private List<List<PubsubMessage>> FormPayload(ICollection<AsyncLogEventInfo> logEvents)
         {
 
-            List<PublishRequest> pRequestList = new List<PublishRequest>();
+            List<List<PubsubMessage>> pRequestList = new List<List<PubsubMessage>>();
 
-            PublishRequest pRequest = new PublishRequest()
-            {
-                Messages = new List<PubsubMessage>()
-            };
+            List<PubsubMessage> pRequest = new List<PubsubMessage>();
 
             int totalBytes = 0;
 
             foreach (var ev in logEvents)
             {
-                var bytes = System.Text.Encoding.UTF8.GetBytes(Layout.Render(ev.LogEvent));
+                var bytes = Google.Protobuf.ByteString.CopyFromUtf8(Layout.Render(ev.LogEvent));
 
-                if (bytes.Length + totalBytes > MaxBytesPerRequest)
+                if (bytes.Length < MaxBytesPerRequest)
                 {
-                    pRequestList.Add(pRequest);
-                    pRequest = new PublishRequest()
+                    if (bytes.Length + totalBytes > MaxBytesPerRequest)
                     {
-                        Messages = new List<PubsubMessage>()
-                    };
+                        pRequestList.Add(pRequest);
 
-                    totalBytes = 0;
+                        totalBytes = 0;
+                    }
+
+                    var message = new PubsubMessage() { Data = bytes };
+
+                    foreach (var atr in _atributesD)
+                    {
+                        message.Attributes.Add(atr.Key, atr.Value);
+                    }
+
+                    pRequest.Add(message);
+
+                    totalBytes += bytes.Length;
                 }
-
-                pRequest.Messages.Add(new PubsubMessage() {Attributes = _atributesD, Data = Convert.ToBase64String(bytes) });
-                totalBytes += bytes.Length;
+                else
+                {
+                    InternalLogger.Trace($"Failed to send message to PubSub, message exceed limit bytesMessageSize:{bytes.Length}, bytesMaxSize:{MaxBytesPerRequest}");
+                }
 
             }
 
-            if (pRequest.Messages.Count > 0)
+            if (pRequest.Count > 0)
             {
                 pRequestList.Add(pRequest);
             }
             return pRequestList;
         }
 
-        private List<PublishRequest> FormPayloadConcat(ICollection<AsyncLogEventInfo> logEvents)
+        private List<List<PubsubMessage>> FormPayloadConcat(ICollection<AsyncLogEventInfo> logEvents)
         {
 
-            List<PublishRequest> pRequestList = new List<PublishRequest>();
+            List<List<PubsubMessage>> pRequestList = new List<List<PubsubMessage>>();
 
-            PublishRequest pRequest = new PublishRequest()
-            {
-                Messages = new List<PubsubMessage>()
-            };
+            List<PubsubMessage> pRequest = new List<PubsubMessage>();
 
-            int totalBytes = 0;
+            int count = 0;
 
-           
             StringBuilder sb = new StringBuilder();
-            
+
             foreach (var ev in logEvents)
             {
-                var bytes = System.Text.Encoding.UTF8.GetBytes(Layout.Render(ev.LogEvent));
 
-                if (bytes.Length + totalBytes > MaxBytesPerRequest)
+                if (count > MaxMessagesPerRequest)
                 {
-                    pRequest.Messages.Add(new PubsubMessage() { Attributes = _atributesD, Data = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(sb.ToString()))});
-                    pRequestList.Add(pRequest);
-                    pRequest = new PublishRequest()
+                    var message = new PubsubMessage() { Data = Google.Protobuf.ByteString.CopyFromUtf8(sb.ToString()) };
+
+                    foreach (var atr in _atributesD)
                     {
-                        Messages = new List<PubsubMessage>()
-                    };
+                        message.Attributes.Add(atr.Key, atr.Value);
+                    }
+
+                    pRequest.Add(message);
+                    pRequestList.Add(pRequest);
+
+                    pRequest = new List<PubsubMessage>();
 
                     sb = new StringBuilder();
 
-                    totalBytes = 0;
+                    count = 0;
                 }
 
                 sb.AppendLine(Layout.Render(ev.LogEvent));
-
-                totalBytes += bytes.Length;
-
+                count += 1;
             }
 
             //Enviamos los últimos mensajes
-            if (totalBytes > 0)
+            if (count > 0)
             {
-                pRequest.Messages.Add(new PubsubMessage() { Attributes = _atributesD, Data = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(sb.ToString()))});
+                var message = new PubsubMessage() { Data = Google.Protobuf.ByteString.CopyFromUtf8(sb.ToString()) };
+
+                foreach (var atr in _atributesD)
+                {
+                    message.Attributes.Add(atr.Key, atr.Value);
+                }
+
+                pRequest.Add(message);
                 pRequestList.Add(pRequest);
             }
 
             return pRequestList;
+
         }
     }
 }
