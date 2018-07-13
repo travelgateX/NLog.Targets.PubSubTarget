@@ -19,7 +19,7 @@ namespace NLog.Targets.PubSubTarget
 
         public string FileName { get; set; }
 
-        public string Directory { get; set; } 
+        public string DirectoryFileJson { get; set; } 
 
         public string Topic { get; set; }
 
@@ -92,7 +92,7 @@ namespace NLog.Targets.PubSubTarget
 
                 List<Task<PublishResponse>> tasks = new List<Task<PublishResponse>>();
 
-                GoogleResources gr = GoogleResources.Instance(FileName, Directory, Project, Topic);
+                GoogleResources gr = GoogleResources.Instance(FileName, DirectoryFileJson, Project, Topic);
 
                 foreach (var pubSubRequest in pubSubRequests)
                 {
