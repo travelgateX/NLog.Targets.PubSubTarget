@@ -38,6 +38,9 @@ namespace Nlog.Targets.PubSub
             {
                 string dir = string.Empty;
 
+                InternalLogger.Warn($"DirectoryPathJsonFile is={Directory}");
+
+
                 if (string.IsNullOrEmpty(Directory))
                 {
                     dir = Path.Combine(Environment.CurrentDirectory, FileNameCertificateP12);
@@ -47,7 +50,11 @@ namespace Nlog.Targets.PubSub
                     dir = Path.Combine(Directory, FileNameCertificateP12);
                 }
 
-                GoogleCredential cred = GoogleCredential.FromFile(FileNameCertificateP12);
+
+                InternalLogger.Warn($"JsonFile is={dir}");
+
+
+                GoogleCredential cred = GoogleCredential.FromFile(dir);
 
 
                 Channel channel = new Channel(
