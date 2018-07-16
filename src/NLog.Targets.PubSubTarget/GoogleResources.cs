@@ -17,21 +17,36 @@ namespace Nlog.Targets.PubSub
     public class GoogleResources
     {
         private static readonly object SyncLock_LOCK = new object();
-        private static GoogleResources _mInstance;
+        private static Dictionary<string, GoogleResources> _mInstance = null;
+
+        public PublisherServiceApiClient publisherServiceApiClient { get; private set; }
+
+        public TopicName topic { get; private set; }
+
 
         public static GoogleResources Instance(string FileNameCertificateP12, string Directory, string project, string topic)
         {
-                if ((_mInstance == null))
-                    lock (SyncLock_LOCK)
-                        if ((_mInstance == null))
-                             _mInstance = loadResources(FileNameCertificateP12, Directory, project, topic);
-            return _mInstance;
+            if (_mInstance == null || !_mInstance.ContainsKey(topic))
+            {
+                lock (SyncLock_LOCK)
+                {
+                    if (_mInstance == null || !_mInstance.ContainsKey(topic))
+                    {
+                        if (_mInstance == null)
+                        {
+                            _mInstance = new Dictionary<string, GoogleResources>();
+                        }
+                        _mInstance.Add(topic, loadResources(FileNameCertificateP12, Directory, project, topic));
+                    }
+                }
+
+            }
+
+            return _mInstance[topic];
         }
 
         private static GoogleResources loadResources(string FileNameCertificateP12, string Directory, string project, string topic)
         {
-
-
 
             GoogleResources bqResources = new GoogleResources();
             try
@@ -87,10 +102,6 @@ namespace Nlog.Targets.PubSub
             return bqResources;
         }
 
-        //public PubsubService pubsubService { get; private set; }
 
-        public PublisherServiceApiClient publisherServiceApiClient { get; private set; }
-
-        public TopicName topic { get; private set; }
     }
 }
