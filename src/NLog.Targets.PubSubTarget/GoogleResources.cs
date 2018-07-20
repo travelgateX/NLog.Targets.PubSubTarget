@@ -24,7 +24,7 @@ namespace Nlog.Targets.PubSub
         public TopicName topic { get; private set; }
 
 
-        public static GoogleResources Instance(string FileNameCertificateP12, string Directory, string project, string topic)
+        public static GoogleResources Instance(string FileNameCertificateP12, string Directory, string project, string topic, int timeout)
         {
             if (_mInstance == null || !_mInstance.ContainsKey(topic))
             {
@@ -36,7 +36,7 @@ namespace Nlog.Targets.PubSub
                         {
                             _mInstance = new Dictionary<string, GoogleResources>();
                         }
-                        _mInstance.Add(topic, loadResources(FileNameCertificateP12, Directory, project, topic));
+                        _mInstance.Add(topic, loadResources(FileNameCertificateP12, Directory, project, topic, timeout));
                     }
                 }
 
@@ -45,7 +45,7 @@ namespace Nlog.Targets.PubSub
             return _mInstance[topic];
         }
 
-        private static GoogleResources loadResources(string FileNameCertificateP12, string Directory, string project, string topic)
+        private static GoogleResources loadResources(string FileNameCertificateP12, string Directory, string project, string topic, int timeout)
         {
 
             GoogleResources bqResources = new GoogleResources();
@@ -76,13 +76,15 @@ namespace Nlog.Targets.PubSub
                     PublisherServiceApiClient.DefaultEndpoint.Host, PublisherServiceApiClient.DefaultEndpoint.Port, cred.ToChannelCredentials());
 
 
-                BackoffSettings bofretries = new BackoffSettings(TimeSpan.FromMilliseconds(900), TimeSpan.FromMilliseconds(3000), 2);
+                //BackoffSettings bofretries = new BackoffSettings(TimeSpan.FromMilliseconds(900), TimeSpan.FromMilliseconds(3000), 2);
 
-                BackoffSettings boftimeouts = new BackoffSettings(TimeSpan.FromMilliseconds(2000), TimeSpan.FromMilliseconds(2000), 1);
+                //BackoffSettings boftimeouts = new BackoffSettings(TimeSpan.FromMilliseconds(2000), TimeSpan.FromMilliseconds(2000), 1);
 
-                RetrySettings settings = new RetrySettings(bofretries, boftimeouts, Expiration.FromTimeout(TimeSpan.FromSeconds(3)));
+                //RetrySettings settings = new RetrySettings(bofretries, boftimeouts, Expiration.FromTimeout(TimeSpan.FromSeconds(3)));
 
-                CallTiming ct = CallTiming.FromRetry(settings);
+                //CallTiming ct = CallTiming.FromRetry(settings);
+
+                CallTiming ct = CallTiming.FromTimeout(TimeSpan.FromSeconds(timeout));
 
                 PublisherServiceApiSettings pas = PublisherServiceApiSettings.GetDefault();
                 pas.PublishSettings = CallSettings.FromCallTiming(ct);
