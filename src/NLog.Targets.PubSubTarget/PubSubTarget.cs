@@ -95,76 +95,78 @@ namespace NLog.Targets.PubSubTarget
                     pubSubRequests = FormPayload(logEvents);
                 }
 
-                GoogleResources gr = GoogleResources.Instance(FileName, DirectoryPathJsonFile, Project, Topic, Timeout);
-
-                foreach (var pubSubRequest in pubSubRequests)
+                if (pubSubRequests.Count > 0)
                 {
-                    Task<PublishResponse> pubSubResponse = gr.publisherServiceApiClient.PublishAsync(gr.topic, pubSubRequest);
-                    tasks.Add(pubSubResponse);
-                }
+                    GoogleResources gr = GoogleResources.Instance(FileName, DirectoryPathJsonFile, Project, Topic, Timeout);
 
-
-                var t =  Task.WhenAll(tasks);
-
-                await t.ContinueWith(x => { });
-
-                List<List<PubsubMessage>> pubSubRequestsFailure = new List<List<PubsubMessage>>();
-
-                int count = 0;
-                foreach (var task in tasks)
-                {
-                    if (task.Exception != null || task.Result == null)
+                    foreach (var pubSubRequest in pubSubRequests)
                     {
-
-                        //Ignore timeout exceptions
-                        if (task.Exception.InnerException == null || task.Exception.InnerException.GetType() != typeof(Grpc.Core.RpcException) || ((Grpc.Core.RpcException)task.Exception.InnerException).StatusCode != Grpc.Core.StatusCode.DeadlineExceeded)
-                        {
-                            InternalLogger.Trace($"Failed to send a request to PubSub: exception={task.Exception.ToString()}");
-                            pubSubRequestsFailure.Add(pubSubRequests[count]);
-
-                        }
-                    }
-                    else if (task.Result != null && task.Result.MessageIds.Count != pubSubRequests[count].Count) //Can happen?
-                    {
-                        InternalLogger.Trace($"Failed to send all messages from a request to PubSub: total messages={pubSubRequests[count].Count}, messages received ={task.Result.MessageIds.Count}");
-                    }
-                    count += 1;
-                }
-
-
-                if (!string.IsNullOrEmpty(TopicFailure) && pubSubRequestsFailure.Count > 0)
-                {
-                    InternalLogger.Info($"Retry send messages to PubSub on TopicFailure");
-
-                    tasks = new List<Task<PublishResponse>>();
-
-                    GoogleResources grFailure = GoogleResources.Instance(FileName, DirectoryPathJsonFile, Project, TopicFailure, Timeout);
-
-                    foreach (var pubSubRequest in pubSubRequestsFailure)
-                    {
-                        Task<PublishResponse> pubSubResponse = grFailure.publisherServiceApiClient.PublishAsync(grFailure.topic, pubSubRequest);
+                        Task<PublishResponse> pubSubResponse = gr.publisherServiceApiClient.PublishAsync(gr.topic, pubSubRequest);
                         tasks.Add(pubSubResponse);
                     }
 
-                    t = Task.WhenAll(tasks);
+
+                    var t = Task.WhenAll(tasks);
 
                     await t.ContinueWith(x => { });
 
-                    int countFailure = 0;
+                    List<List<PubsubMessage>> pubSubRequestsFailure = new List<List<PubsubMessage>>();
+
+                    int count = 0;
                     foreach (var task in tasks)
                     {
                         if (task.Exception != null || task.Result == null)
                         {
-                            InternalLogger.Trace($"Failed to send a request to PubSub on TopicFailure: exception={task.Exception.ToString()}");
+
+                            //Ignore timeout exceptions
+                            if (task.Exception.InnerException == null || task.Exception.InnerException.GetType() != typeof(Grpc.Core.RpcException) || ((Grpc.Core.RpcException)task.Exception.InnerException).StatusCode != Grpc.Core.StatusCode.DeadlineExceeded)
+                            {
+                                InternalLogger.Trace($"Failed to send a request to PubSub: exception={task.Exception.ToString()}");
+                                pubSubRequestsFailure.Add(pubSubRequests[count]);
+
+                            }
                         }
-                        else if (task.Result.MessageIds.Count != pubSubRequestsFailure[countFailure].Count)
+                        else if (task.Result != null && task.Result.MessageIds.Count != pubSubRequests[count].Count) //Can happen?
                         {
-                            InternalLogger.Trace($"Failed to send all messages from a request to PubSub on TopicFailure: total messages={pubSubRequestsFailure[countFailure].Count}, messages received ={task.Result.MessageIds.Count}");
+                            InternalLogger.Trace($"Failed to send all messages from a request to PubSub: total messages={pubSubRequests[count].Count}, messages received ={task.Result.MessageIds.Count}");
                         }
-                        countFailure += 1;
+                        count += 1;
+                    }
+
+
+                    if (!string.IsNullOrEmpty(TopicFailure) && pubSubRequestsFailure.Count > 0)
+                    {
+                        InternalLogger.Info($"Retry send messages to PubSub on TopicFailure");
+
+                        tasks = new List<Task<PublishResponse>>();
+
+                        GoogleResources grFailure = GoogleResources.Instance(FileName, DirectoryPathJsonFile, Project, TopicFailure, Timeout);
+
+                        foreach (var pubSubRequest in pubSubRequestsFailure)
+                        {
+                            Task<PublishResponse> pubSubResponse = grFailure.publisherServiceApiClient.PublishAsync(grFailure.topic, pubSubRequest);
+                            tasks.Add(pubSubResponse);
+                        }
+
+                        t = Task.WhenAll(tasks);
+
+                        await t.ContinueWith(x => { });
+
+                        int countFailure = 0;
+                        foreach (var task in tasks)
+                        {
+                            if (task.Exception != null || task.Result == null)
+                            {
+                                InternalLogger.Trace($"Failed to send a request to PubSub on TopicFailure: exception={task.Exception.ToString()}");
+                            }
+                            else if (task.Result.MessageIds.Count != pubSubRequestsFailure[countFailure].Count)
+                            {
+                                InternalLogger.Trace($"Failed to send all messages from a request to PubSub on TopicFailure: total messages={pubSubRequestsFailure[countFailure].Count}, messages received ={task.Result.MessageIds.Count}");
+                            }
+                            countFailure += 1;
+                        }
                     }
                 }
-
             }
             catch (Exception ex)
             {
@@ -197,7 +199,7 @@ namespace NLog.Targets.PubSubTarget
                     if (bytes.Length + totalBytes > MaxBytesPerRequest)
                     {
                         pRequestList.Add(pRequest);
-
+                        pRequest = new List<PubsubMessage>();
                         totalBytes = 0;
                     }
 
