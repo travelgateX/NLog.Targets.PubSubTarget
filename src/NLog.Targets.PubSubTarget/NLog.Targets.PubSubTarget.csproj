@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net462</TargetFrameworks>
+    <TargetFrameworks>net462;netcoreapp2.1</TargetFrameworks>
     <Description>An NLog target that send logs by pubsub.</Description>
     <PackageLicenseUrl>https://github.com/XML-Travelgate/NLog.Targets.PubSubTarget/blob/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/XML-Travelgate/NLog.Targets.PubSubTarget.git</PackageProjectUrl>
@@ -27,11 +27,6 @@
     <PackageReference Include="Google.Protobuf" Version="3.6.0" />
     <PackageReference Include="Grpc.Auth" Version="1.13.0" />
     <PackageReference Include="NLog" Version="4.5.3" />
-  </ItemGroup>
-
-  <ItemGroup Condition=" '$(TargetFramework)' == 'net462' ">
-    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
-    <PackageReference Include="System.Net.Http" Version="4.3.1" />
   </ItemGroup>
 
 </Project>

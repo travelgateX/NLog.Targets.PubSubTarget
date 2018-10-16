@@ -1,16 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Cryptography.X509Certificates;
 using Google.Apis.Auth.OAuth2;
-//using Google.Apis.Pubsub.v1;
-using Google.Apis.Services;
 using Google.Cloud.PubSub.V1;
 using NLog.Common;
 using Grpc.Auth;
 using Grpc.Core;
 using Google.Api.Gax.Grpc;
-using Google.Api.Gax;
 
 namespace Nlog.Targets.PubSub
 {
