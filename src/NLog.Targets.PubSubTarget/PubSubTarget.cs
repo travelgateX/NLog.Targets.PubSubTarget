@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using NLog.Common;
-//using Google.Apis.Pubsub.v1.Data;
 using Google.Cloud.PubSub.V1;
 using Nlog.Targets.PubSub;
 using System.Threading.Tasks;
