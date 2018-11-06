@@ -18,7 +18,7 @@ namespace NLog.Targets.PubSubTarget
 
         public string FileName { get; set; }
 
-        public string DirectoryPathJsonFile { get; set; } 
+        public string DirectoryPathJsonFile { get; set; }
 
         public string Topic { get; set; }
 
@@ -32,6 +32,10 @@ namespace NLog.Targets.PubSubTarget
 
         public int Timeout { get; set; } = 3;
 
+        public bool CreateTopicIfNotExist { get; set; } = false;
+
+        public bool CreateSubscriberIfNotExist { get; set; } = false;
+
         private Dictionary<string, string> _atributesD = null;
         public PubSubTarget()
         {
@@ -42,7 +46,7 @@ namespace NLog.Targets.PubSubTarget
                 _atributesD = new Dictionary<string, string>();
 
                 var ats = Atributes.Split(';');
-                foreach(var at in ats)
+                foreach (var at in ats)
                 {
                     var kv = at.Split(':');
                     _atributesD.Add(kv[0], kv[1]);
@@ -85,7 +89,7 @@ namespace NLog.Targets.PubSubTarget
                     }
                 }
 
-                if (ConcatMessages == true )
+                if (ConcatMessages == true)
                 {
                     pubSubRequests = FormPayloadConcat(logEvents);
                 }
@@ -96,7 +100,7 @@ namespace NLog.Targets.PubSubTarget
 
                 if (pubSubRequests.Count > 0)
                 {
-                    GoogleResources gr = GoogleResources.Instance(FileName, DirectoryPathJsonFile, Project, Topic, Timeout);
+                    GoogleResources gr = GoogleResources.Instance(FileName, DirectoryPathJsonFile, Project, Topic, Timeout, CreateTopicIfNotExist, CreateSubscriberIfNotExist);
 
                     foreach (var pubSubRequest in pubSubRequests)
                     {
@@ -139,7 +143,7 @@ namespace NLog.Targets.PubSubTarget
 
                         tasks = new List<Task<PublishResponse>>();
 
-                        GoogleResources grFailure = GoogleResources.Instance(FileName, DirectoryPathJsonFile, Project, TopicFailure, Timeout);
+                        GoogleResources grFailure = GoogleResources.Instance(FileName, DirectoryPathJsonFile, Project, TopicFailure, Timeout, CreateTopicIfNotExist, CreateSubscriberIfNotExist);
 
                         foreach (var pubSubRequest in pubSubRequestsFailure)
                         {

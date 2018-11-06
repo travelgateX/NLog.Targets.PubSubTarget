@@ -20,7 +20,7 @@ namespace Nlog.Targets.PubSub
         public TopicName topic { get; private set; }
 
 
-        public static GoogleResources Instance(string FileNameCertificateP12, string Directory, string project, string topic, int timeout)
+        public static GoogleResources Instance(string FileNameCertificateP12, string Directory, string project, string topic, int timeout, bool tryCreateTopic, bool tryCreateSubscriber)
         {
             if (_mInstance == null || !_mInstance.ContainsKey(topic))
             {
@@ -32,7 +32,7 @@ namespace Nlog.Targets.PubSub
                         {
                             _mInstance = new Dictionary<string, GoogleResources>();
                         }
-                        _mInstance.Add(topic, loadResources(FileNameCertificateP12, Directory, project, topic, timeout));
+                        _mInstance.Add(topic, loadResources(FileNameCertificateP12, Directory, project, topic, timeout, tryCreateTopic, tryCreateSubscriber));
                     }
                 }
 
@@ -41,7 +41,7 @@ namespace Nlog.Targets.PubSub
             return _mInstance[topic];
         }
 
-        private static GoogleResources loadResources(string FileNameCertificateP12, string Directory, string project, string topic, int timeout)
+        private static GoogleResources loadResources(string FileNameCertificateP12, string Directory, string project, string topic, int timeout, bool tryCreateTopic, bool tryCreateSubscriber)
         {
 
             GoogleResources bqResources = new GoogleResources();
@@ -86,15 +86,42 @@ namespace Nlog.Targets.PubSub
                 pas.PublishSettings = CallSettings.FromCallTiming(ct);
 
                 PublisherServiceApiClient client = PublisherServiceApiClient.Create(channel, pas);
+                TopicName topicName = new TopicName(project, topic);
 
-                bqResources.topic = new TopicName(project, topic);
+                bqResources.topic = topicName;
 
                 bqResources.publisherServiceApiClient = client;
+
+                //Si no existe, creamos topic
+                if (tryCreateTopic)
+                {
+                    client.CreateTopic(topicName);
+                }
+                //Si no existe, creamos subscriber
+                if (tryCreateSubscriber)
+                {
+                    var subsPas = SubscriberServiceApiSettings.GetDefault();
+                    var subscriber = SubscriberServiceApiClient.Create(channel, subsPas);
+                    //Se usa el mismo topicId para el subscriberId
+                    var subscriptionName = new SubscriptionName(project, topic);
+
+                    var subscription = subscriber.CreateSubscription(subscriptionName, topicName, pushConfig: null, ackDeadlineSeconds: 60);
+
+                }
 
             }
             catch (Exception ex)
             {
-                InternalLogger.Error($"Failed to initialize GoogleResources to PubSub ex={ex.ToString()}");
+
+                if (ex.GetType() == typeof(RpcException))
+                {
+                    var exRpc = (RpcException)ex;
+                    InternalLogger.Error($"Failed to create topic or subscription ex={exRpc.ToString()}");
+                }
+                else
+                {
+                    InternalLogger.Error($"Failed to initialize GoogleResources to PubSub ex={ex.ToString()}");
+                }
             }
 
             return bqResources;
