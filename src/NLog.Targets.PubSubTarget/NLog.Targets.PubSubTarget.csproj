@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net462</TargetFrameworks>
+    <TargetFramework>netstandard2.0</TargetFramework>
     <Description>An NLog target that send logs by pubsub.</Description>
     <PackageLicenseUrl>https://github.com/XML-Travelgate/NLog.Targets.PubSubTarget/blob/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/XML-Travelgate/NLog.Targets.PubSubTarget.git</PackageProjectUrl>
