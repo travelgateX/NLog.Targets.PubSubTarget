@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.26228.4
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NLog.Targets.PubSubTarget", "NLog.Targets.PubSubTarget\NLog.Targets.PubSubTarget.csproj", "{B0B84774-1B40-4735-A5CE-B08C4FB3BA3B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NLog.Targets.PubSubTarget", "src\NLog.Targets.PubSubTarget\NLog.Targets.PubSubTarget.csproj", "{B0B84774-1B40-4735-A5CE-B08C4FB3BA3B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

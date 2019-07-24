@@ -1,24 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using NLog.Common;
-using Google.Cloud.PubSub.V1;
+﻿using Google.Cloud.PubSub.V1;
 using Nlog.Targets.PubSub;
-using System.Threading.Tasks;
+using NLog.Common;
+using System;
+using System.Collections.Generic;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace NLog.Targets.PubSubTarget
 {
     [Target("PubSubTarget")]
     public class PubSubTarget : TargetWithLayout
     {
-
         public int MaxBytesPerRequest { get; set; } = 1048576;
 
         public int MaxMessagesPerRequest { get; set; } = 1000;
 
         public string FileName { get; set; }
 
-        public string DirectoryPathJsonFile { get; set; } 
+        public string DirectoryPathJsonFile { get; set; }
 
         public string Topic { get; set; }
 
@@ -32,7 +31,8 @@ namespace NLog.Targets.PubSubTarget
 
         public int Timeout { get; set; } = 3;
 
-        private Dictionary<string, string> _atributesD = null;
+        private Dictionary<string, string> _atributesD;
+
         public PubSubTarget()
         {
             Name = "PubSubTarget";
@@ -41,18 +41,12 @@ namespace NLog.Targets.PubSubTarget
             {
                 _atributesD = new Dictionary<string, string>();
 
-                var ats = Atributes.Split(';');
-                foreach(var at in ats)
+                foreach (var at in Atributes.Split(';'))
                 {
                     var kv = at.Split(':');
                     _atributesD.Add(kv[0], kv[1]);
                 }
             }
-        }
-
-        protected override void InitializeTarget()
-        {
-            base.InitializeTarget();
         }
 
         protected override void Write(AsyncLogEventInfo logEvent)
@@ -69,23 +63,19 @@ namespace NLog.Targets.PubSubTarget
         {
             List<List<PubsubMessage>> pubSubRequests = null;
             List<Task<PublishResponse>> tasks = new List<Task<PublishResponse>>();
-
             try
             {
-
                 if (!string.IsNullOrEmpty(Atributes) && _atributesD == null)
                 {
                     _atributesD = new Dictionary<string, string>();
-
-                    var ats = Atributes.Split(';');
-                    foreach (var at in ats)
+                    foreach (var at in Atributes.Split(';'))
                     {
                         var kv = at.Split(':');
                         _atributesD.Add(kv[0], kv[1]);
                     }
                 }
 
-                if (ConcatMessages == true )
+                if (ConcatMessages == true)
                 {
                     pubSubRequests = FormPayloadConcat(logEvents);
                 }
@@ -97,50 +87,40 @@ namespace NLog.Targets.PubSubTarget
                 if (pubSubRequests.Count > 0)
                 {
                     GoogleResources gr = GoogleResources.Instance(FileName, DirectoryPathJsonFile, Project, Topic, Timeout);
-
                     foreach (var pubSubRequest in pubSubRequests)
                     {
                         Task<PublishResponse> pubSubResponse = gr.publisherServiceApiClient.PublishAsync(gr.topic, pubSubRequest);
                         tasks.Add(pubSubResponse);
                     }
 
-
                     var t = Task.WhenAll(tasks);
-
-                    await t.ContinueWith(x => { });
-
+                    await t.ContinueWith(_ => { }).ConfigureAwait(false);
                     List<List<PubsubMessage>> pubSubRequestsFailure = new List<List<PubsubMessage>>();
-
                     int count = 0;
                     foreach (var task in tasks)
                     {
                         if (task.Exception != null || task.Result == null)
                         {
-
-                            //Ignore timeout exceptions
+                            // Ignore timeout exceptions
                             if (task.Exception.InnerException == null || task.Exception.InnerException.GetType() != typeof(Grpc.Core.RpcException) || ((Grpc.Core.RpcException)task.Exception.InnerException).StatusCode != Grpc.Core.StatusCode.DeadlineExceeded)
                             {
-                                InternalLogger.Trace($"Failed to send a request to PubSub: exception={task.Exception.ToString()}");
+                                InternalLogger.Trace($"Failed to send a request to PubSub: exception={task.Exception}");
                                 pubSubRequestsFailure.Add(pubSubRequests[count]);
-
                             }
                         }
                         else if (task.Result != null && task.Result.MessageIds.Count != pubSubRequests[count].Count) //Can happen?
                         {
                             InternalLogger.Trace($"Failed to send all messages from a request to PubSub: total messages={pubSubRequests[count].Count}, messages received ={task.Result.MessageIds.Count}");
                         }
-                        count += 1;
-                    }
 
+                        count++;
+                    }
 
                     if (!string.IsNullOrEmpty(TopicFailure) && pubSubRequestsFailure.Count > 0)
                     {
                         InternalLogger.Info($"Retry send messages to PubSub on TopicFailure");
-
                         tasks = new List<Task<PublishResponse>>();
-
                         GoogleResources grFailure = GoogleResources.Instance(FileName, DirectoryPathJsonFile, Project, TopicFailure, Timeout);
-
                         foreach (var pubSubRequest in pubSubRequestsFailure)
                         {
                             Task<PublishResponse> pubSubResponse = grFailure.publisherServiceApiClient.PublishAsync(grFailure.topic, pubSubRequest);
@@ -148,28 +128,27 @@ namespace NLog.Targets.PubSubTarget
                         }
 
                         t = Task.WhenAll(tasks);
-
-                        await t.ContinueWith(x => { });
-
+                        await t.ContinueWith(_ => { }).ConfigureAwait(false);
                         int countFailure = 0;
                         foreach (var task in tasks)
                         {
                             if (task.Exception != null || task.Result == null)
                             {
-                                InternalLogger.Trace($"Failed to send a request to PubSub on TopicFailure: exception={task.Exception.ToString()}");
+                                InternalLogger.Trace($"Failed to send a request to PubSub on TopicFailure: exception={task.Exception}");
                             }
                             else if (task.Result.MessageIds.Count != pubSubRequestsFailure[countFailure].Count)
                             {
                                 InternalLogger.Trace($"Failed to send all messages from a request to PubSub on TopicFailure: total messages={pubSubRequestsFailure[countFailure].Count}, messages received ={task.Result.MessageIds.Count}");
                             }
-                            countFailure += 1;
+
+                            countFailure++;
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                InternalLogger.Error($"Error while sending log messages to PubSub: message=\"{ex.ToString()}\"");
+                InternalLogger.Error($"Error while sending log messages to PubSub: message=\"{ex}\"");
             }
             finally
             {
@@ -182,17 +161,12 @@ namespace NLog.Targets.PubSubTarget
 
         private List<List<PubsubMessage>> FormPayload(ICollection<AsyncLogEventInfo> logEvents)
         {
-
             List<List<PubsubMessage>> pRequestList = new List<List<PubsubMessage>>();
-
             List<PubsubMessage> pRequest = new List<PubsubMessage>();
-
             int totalBytes = 0;
-
             foreach (var ev in logEvents)
             {
                 var bytes = Google.Protobuf.ByteString.CopyFromUtf8(Layout.Render(ev.LogEvent));
-
                 if (bytes.Length < MaxBytesPerRequest)
                 {
                     if (bytes.Length + totalBytes > MaxBytesPerRequest)
@@ -203,48 +177,39 @@ namespace NLog.Targets.PubSubTarget
                     }
 
                     var message = new PubsubMessage() { Data = bytes };
-
                     foreach (var atr in _atributesD)
                     {
                         message.Attributes.Add(atr.Key, atr.Value);
                     }
 
                     pRequest.Add(message);
-
                     totalBytes += bytes.Length;
                 }
                 else
                 {
                     InternalLogger.Trace($"Failed to send message to PubSub, message exceed limit bytesMessageSize:{bytes.Length}, bytesMaxSize:{MaxBytesPerRequest}");
                 }
-
             }
 
             if (pRequest.Count > 0)
             {
                 pRequestList.Add(pRequest);
             }
+
             return pRequestList;
         }
 
         private List<List<PubsubMessage>> FormPayloadConcat(ICollection<AsyncLogEventInfo> logEvents)
         {
-
             List<List<PubsubMessage>> pRequestList = new List<List<PubsubMessage>>();
-
             List<PubsubMessage> pRequest = new List<PubsubMessage>();
-
             int count = 0;
-
             StringBuilder sb = new StringBuilder();
-
             foreach (var ev in logEvents)
             {
-
                 if (count > MaxMessagesPerRequest)
                 {
                     var message = new PubsubMessage() { Data = Google.Protobuf.ByteString.CopyFromUtf8(sb.ToString()) };
-
                     foreach (var atr in _atributesD)
                     {
                         message.Attributes.Add(atr.Key, atr.Value);
@@ -252,23 +217,19 @@ namespace NLog.Targets.PubSubTarget
 
                     pRequest.Add(message);
                     pRequestList.Add(pRequest);
-
                     pRequest = new List<PubsubMessage>();
-
                     sb = new StringBuilder();
-
                     count = 0;
                 }
 
                 sb.AppendLine(Layout.Render(ev.LogEvent));
-                count += 1;
+                count++;
             }
 
-            //Enviamos los últimos mensajes
+            // We send last messages
             if (count > 0)
             {
                 var message = new PubsubMessage() { Data = Google.Protobuf.ByteString.CopyFromUtf8(sb.ToString()) };
-
                 foreach (var atr in _atributesD)
                 {
                     message.Attributes.Add(atr.Key, atr.Value);
@@ -279,7 +240,6 @@ namespace NLog.Targets.PubSubTarget
             }
 
             return pRequestList;
-
         }
     }
 }
